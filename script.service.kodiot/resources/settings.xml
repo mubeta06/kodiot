@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="32001">
+        <setting label="32011" type="text" id="host" default="127.0.0.1"/>
+        <setting label="32012" type="number" id="port" default="8883"/>
+        <setting label="32014" type="bool" id="debug" default="false"/>
+    </category>
+    <category label="32100">
+        <setting label="32101" type="bool" id="tls" default="true" />
+        <setting label="32102" type="file" id="cacrt" value="" default="" visible="eq(-1,true)" subsetting="true" />
+        <setting label="32103" type="file" id="pem" value="" default="" visible="eq(-2,true)" subsetting="true" />
+        <setting label="32104" type="file" id="key" value="" default="" visible="eq(-3,true)" subsetting="true" />
+    </category>
+    <category label="32200">
+        <setting label="32201" type="text" id="keepalive" default="45"/>
+    </category>
+</settings>

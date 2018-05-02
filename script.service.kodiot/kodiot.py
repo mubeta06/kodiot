@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import ssl
 
 import xbmc
 import xbmcaddon
@@ -11,21 +12,121 @@ from lib.paho import mqtt
 from lib.paho.mqtt import client
 
 
-ADDON = xbmcaddon.Addon()
-__version__ = ADDON.getAddonInfo('version')
+class XbmcHandler(logging.Handler):
 
-# need to write a kodi log handler perhaps also log to mqtt topic
+    """Logging Handler to integrate built-in logging package with xbmc's.
+    """
+
+    def emit(self, record):
+        """Write the record to xbmc log system.
+        """
+        try:
+            msg = self.format(record)
+            xbmc.log(msg)
+        except:
+            self.handleError(record)
+
+
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG) 
+LOG.addHandler(XbmcHandler())
+
+
+class KodiotMonitor(xbmc.Monitor):
+
+    """Monitors for setting changes."""
+
+    def onSettingsChanged(self):
+        """Called when addon settings are changed."""
+        LOG.info('Kodiot: Settings changed, reconnecting broker')
+        self.changed = True
+
+
+class Kodiot(object):
+
+    """Kodiot Add on Abstraction."""
+
+    def __init__(self):
+        self.addon = xbmcaddon.Addon()
+
+    @property
+    def version(self):
+        """Return the version of this Addon."""
+        return self.addon.getAddonInfo('version')
+
+    @property
+    def host(self):
+        """Return the host setting."""
+        return self.addon.getSetting('host').strip()
+
+    @property
+    def port(self):
+        """Return the port setting."""
+        return int(self.addon.getSetting('port').strip())
+
+    @property
+    def root_ca(self):
+        """Return the Root CA cert path."""
+        return self.addon.getSetting('cacrt').strip()
+
+    @property
+    def pem(self):
+        """Return the PEM file path."""
+        return self.addon.getSetting('pem').strip()
+
+    @property
+    def key(self):
+        """Return the Client Private Key path."""
+        return self.addon.getSetting('key').strip()
+
+    @property
+    def keepalive(self):
+        """Return the keepalive setting."""
+        return float(self.addon.getSetting('keepalive').strip())
+
+    def on_connect(self, mqtt, userdata, flags, rc):
+        """MQTT on connect callback function implementation."""
+        LOG.info('on_connect: %s', client.connack_string(rc))
+        mqtt.subscribe('$aws/things/kodi/shadow/update/delta', qos=1)
+
+    def on_disconnect(self, mqtt, userdata, rc):
+        """MQTT on disconnect callback function implementation."""
+        if rc != 0:
+            LOG.info('on_disconnect: Unexpected disconnection.')
+
+    def on_subscribe(self, mqtt, userdata, mid, granted_qos):
+        """MQTT on subscribe callback function implementation."""
+        LOG.info('on_subscribe: mid: %s QoS: %s', mid, granted_qos)
+
+    def on_message(self, mqtt, userdata, message):
+        """MQTT on message callback function implementation."""
+        LOG.info('on_message: topic: %s payload: %s', message.topic,
+                 message.payload)
 
 
 def main():
     """Main Program."""
-    LOG.info('Launching Kodiot %s, MQTT version %s', __version__,
+    kodiot = Kodiot()
+    LOG.info('Launching Kodiot %s, MQTT version %s', kodiot.version,
              mqtt.__version__)
-    xbmc.log('Launching Kodiot %s, MQTT version %s' % (__version__, mqtt.__version__), xbmc.LOGDEBUG)
-    while True:
-    	pass
 
+    mqttc = client.Client()
+    mqttc.on_connect = kodiot.on_connect
+    mqttc.on_disconnect = kodiot.on_disconnect
+    mqttc.on_subscribe = kodiot.on_subscribe
+    mqttc.on_message = kodiot.on_message
+    mqttc.tls_set(kodiot.root_ca, certfile=kodiot.pem, keyfile=kodiot.key,
+                  cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
+
+    # Connect with MQTT Broker
+    mqttc.connect(kodiot.host, kodiot.port, kodiot.keepalive)
+    mqttc.loop_start()
+
+    monitor = KodiotMonitor()
+    while not monitor.waitForAbort(1.0):
+        pass
+
+    mqttc.loop_stop()
 
 if __name__ == '__main__':
     main()
