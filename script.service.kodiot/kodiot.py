@@ -2,6 +2,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import ssl
 
@@ -23,31 +24,25 @@ class XbmcHandler(logging.Handler):
         try:
             msg = self.format(record)
             xbmc.log(msg)
-        except:
+        except StandardError:
             self.handleError(record)
 
 
 LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG) 
+LOG.setLevel(logging.DEBUG)
 LOG.addHandler(XbmcHandler())
 
 
-class KodiotMonitor(xbmc.Monitor):
-
-    """Monitors for setting changes."""
-
-    def onSettingsChanged(self):
-        """Called when addon settings are changed."""
-        LOG.info('Kodiot: Settings changed, reconnecting broker')
-        self.changed = True
-
-
-class Kodiot(object):
+class Kodiot(xbmc.Monitor):
 
     """Kodiot Add on Abstraction."""
 
     def __init__(self):
         self.addon = xbmcaddon.Addon()
+
+    def onSettingsChanged(self):
+        """Called when addon settings are changed."""
+        LOG.info('Kodiot: Settings changed')
 
     @property
     def version(self):
@@ -87,7 +82,9 @@ class Kodiot(object):
     def on_connect(self, mqtt, userdata, flags, rc):
         """MQTT on connect callback function implementation."""
         LOG.info('on_connect: %s', client.connack_string(rc))
+        # listen on this topic for state updates
         mqtt.subscribe('$aws/things/kodi/shadow/update/delta', qos=1)
+        # publish on '$aws/things/kodi/shadow/update' topic to report state
 
     def on_disconnect(self, mqtt, userdata, rc):
         """MQTT on disconnect callback function implementation."""
@@ -102,6 +99,14 @@ class Kodiot(object):
         """MQTT on message callback function implementation."""
         LOG.info('on_message: topic: %s payload: %s', message.topic,
                  message.payload)
+        if message.topic == '$aws/things/kodi/shadow/update/delta':
+            payload = json.loads(message.payload)
+            result = xbmc.executeJSONRPC(json.dumps(payload['state']))
+            result = json.dumps({'state': {'reported':result, 'desired':None}})
+            LOG.info(result)
+            msginfo = mqtt.publish('$aws/things/kodi/shadow/update', result, qos=1)
+            if msginfo.rc != 0:
+                LOG.info('problem publishing to shadow %s.', str(msginfo))
 
 
 def main():
@@ -122,8 +127,7 @@ def main():
     mqttc.connect(kodiot.host, kodiot.port, kodiot.keepalive)
     mqttc.loop_start()
 
-    monitor = KodiotMonitor()
-    while not monitor.waitForAbort(1.0):
+    while not kodiot.waitForAbort(1.0):
         pass
 
     mqttc.loop_stop()
