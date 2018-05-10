@@ -42,7 +42,7 @@ class Kodiot(xbmc.Monitor):
 
     def onSettingsChanged(self):
         """Called when addon settings are changed."""
-        LOG.info('Kodiot: Settings changed')
+        LOG.debug('Kodiot: Settings changed')
 
     @property
     def version(self):
@@ -79,34 +79,40 @@ class Kodiot(xbmc.Monitor):
         """Return the keepalive setting."""
         return float(self.addon.getSetting('keepalive').strip())
 
-    def on_connect(self, mqtt, userdata, flags, rc):
+    def on_connect(self, mqttc, userdata, flags, rc):
         """MQTT on connect callback function implementation."""
         LOG.info('on_connect: %s', client.connack_string(rc))
-        # listen on this topic for state updates
-        mqtt.subscribe('$aws/things/kodi/shadow/update/delta', qos=1)
-        # publish on '$aws/things/kodi/shadow/update' topic to report state
+        mqttc.subscribe('$aws/things/kodi/shadow/update/delta', qos=1)
+        mqttc.subscribe('$aws/things/kodi/shadow/update/rejected', qos=1)
 
-    def on_disconnect(self, mqtt, userdata, rc):
+    def on_disconnect(self, mqttc, userdata, rc):
         """MQTT on disconnect callback function implementation."""
-        if rc != 0:
-            LOG.info('on_disconnect: Unexpected disconnection.')
+        if rc != client.MQTT_ERR_SUCCESS:
+            LOG.error('on_disconnect: Unexpected disconnection.')
 
-    def on_subscribe(self, mqtt, userdata, mid, granted_qos):
+    def on_subscribe(self, mqttc, userdata, mid, granted_qos):
         """MQTT on subscribe callback function implementation."""
-        LOG.info('on_subscribe: mid: %s QoS: %s', mid, granted_qos)
+        LOG.debug('on_subscribe: mid: %s QoS: %s', mid, granted_qos)
 
-    def on_message(self, mqtt, userdata, message):
+    def on_message(self, mqttc, userdata, message):
         """MQTT on message callback function implementation."""
-        LOG.info('on_message: topic: %s payload: %s', message.topic,
-                 message.payload)
+        LOG.debug('on_message: topic: %s payload: %s', message.topic,
+                  message.payload)
         if message.topic == '$aws/things/kodi/shadow/update/delta':
             payload = json.loads(message.payload)
-            result = xbmc.executeJSONRPC(json.dumps(payload['state']))
-            result = json.dumps({'state': {'reported':result, 'desired':None}})
-            LOG.info(result)
-            msginfo = mqtt.publish('$aws/things/kodi/shadow/update', result, qos=1)
-            if msginfo.rc != 0:
-                LOG.info('problem publishing to shadow %s.', str(msginfo))
+            LOG.debug('JSONRPC: %s', json.dumps(payload['state']))
+            response = xbmc.executeJSONRPC(json.dumps(payload['state']))
+            payload['state']['response'] = json.loads(response)
+            payload['state']['response'].pop('jsonrpc')
+            payload['state']['response'].pop('id')
+            state = json.dumps({'state': {'reported': payload['state']['response'],
+                                          'desired':None}})
+            LOG.debug('publishing state %s', state)
+            info = mqttc.publish('$aws/things/kodi/shadow/update', state, qos=1)
+            if info.rc != client.MQTT_ERR_SUCCESS:
+                LOG.error('problem publishing to shadow %s.', str(info))
+        elif message.topic == '$aws/things/kodi/shadow/update/rejected':
+            LOG.error('rejected: %s', message.payload)
 
 
 def main():
