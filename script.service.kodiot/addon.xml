@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="script.service.kodiot" name="AWS IoT Adapter" version="0.1.8" provider-name="mubeta06">
+<addon id="script.service.kodiot" name="AWS IoT Adapter" version="0.2.0" provider-name="mubeta06">
   <requires>
     <import addon="xbmc.python" version="2.19.0"/>
   </requires>

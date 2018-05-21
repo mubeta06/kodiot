@@ -3,6 +3,7 @@
     <category label="32001">
         <setting label="32011" type="text" id="host" default="127.0.0.1"/>
         <setting label="32012" type="number" id="port" default="8883"/>
+        <setting label="32013" type="text" id="thing" default="kodi"/>
         <setting label="32014" type="bool" id="debug" default="false"/>
     </category>
     <category label="32100">

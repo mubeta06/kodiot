@@ -21,11 +21,15 @@ msgid "General"
 msgstr ""
 
 msgctxt "#32011"
-msgid "Hostname or IP address of the remote broker (IoT endpoint)"
+msgid "Hostname (AWS IoT endpoint)"
 msgstr ""
 
 msgctxt "#32012"
 msgid "Port of the server host to connect to"
+msgstr ""
+
+msgctxt "#32013"
+msgid "AWS IoT Thing Name"
 msgstr ""
 
 msgctxt "#32014"
