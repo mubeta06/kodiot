@@ -40,6 +40,7 @@ class Kodiot(xbmc.Monitor):
     def __init__(self):
         self.addon = xbmcaddon.Addon()
         self.mqtt = client.Client()
+        self._on = None
 
     def start(self):
         """Starting Kodiot."""
@@ -62,6 +63,16 @@ class Kodiot(xbmc.Monitor):
         """Stop Kodiot."""
         LOG.debug('Stopping Kodiot')
         self.mqtt.loop_stop()
+
+    def activate(self):
+        """Turn on device."""
+        xbmc.executebuiltin('CECActivateSource()')
+        self._on = True
+
+    def standby(self):
+        """Turn off device."""
+        xbmc.executebuiltin('CECStandby()')
+        self._on = False
 
     def onSettingsChanged(self):
         """Called when addon settings are changed."""
@@ -93,10 +104,8 @@ class Kodiot(xbmc.Monitor):
             LOG.debug('JSONRPC: %s', json.dumps(payload['state']))
             response = xbmc.executeJSONRPC(json.dumps(payload['state']))
             payload['state']['response'] = json.loads(response)
-            payload['state']['response'].pop('jsonrpc')
-            payload['state']['response'].pop('id')
             state = {'state': {'reported': payload['state']['response'],
-                               'desired':None}}
+                               'desired': None}}
             LOG.debug('publishing state %s', state)
             info = mqttc.publish('/'.join([self.shadow, 'update']),
                                  json.dumps(state), qos=1)
